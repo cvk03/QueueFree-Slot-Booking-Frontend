@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/Machine.dart';
+import '../services/api-service.dart';
 import '../services/firebase_service.dart';
 
 class ConfirmBookingPage extends StatefulWidget {
@@ -29,6 +30,13 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
   }
 
   Future<void> _confirmBooking() async {
+    if (widget.slotDate == null || (widget.machine?.id == null && widget.machineId == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid booking details')),
+      );
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
@@ -36,43 +44,39 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
     try {
       final user = FirebaseService.currentUser;
       if (user == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User not authenticated')),
-        );
-        return;
+        throw 'User not authenticated';
       }
 
-      // TODO: Save booking to Firestore
-      // Example structure:
-      // await _firestore.collection('bookings').add({
-      //   'machineId': widget.machineId,
-      //   'slotDate': widget.slotDate,
-      //   'studentName': user.displayName,
-      //   'studentEmail': user.email,
-      //   'userId': user.uid,
-      //   'createdAt': DateTime.now(),
-      // });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Booking confirmed successfully!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
+      // ✅ Call the real API to create the booking
+      // Note: we use widget.machine?.id (the UID) for the API call
+      await ApiService.createBooking(
+        machineId: widget.machine?.id ?? widget.machineId!,
+        slotDate: widget.slotDate!,
+        userId: user.uid,
       );
 
-      // Navigate back after successful booking
       if (mounted) {
-        Navigator.pop(context);
-        Navigator.pop(context); // Pop back to machines list
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Booking confirmed successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Navigate back after successful booking
+        Navigator.pop(context); // Close bottom sheet
+        Navigator.pop(context); // Go back to machine list or previous screen
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error confirming booking: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -85,14 +89,13 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // ✅ Changed from EdgeInsets.fromSTEB to EdgeInsets.only
       padding: const EdgeInsets.only(top: 60, bottom: 60),
       child: Container(
         width: MediaQuery.sizeOf(context).width,
         height: 350,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: const BorderRadius.only(
+          borderRadius: BorderRadius.only(
             topLeft: Radius.circular(16),
             topRight: Radius.circular(16),
           ),
@@ -104,7 +107,6 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
             children: [
               Expanded(
                 child: Padding(
-                  // ✅ Changed from EdgeInsets.fromSTEB
                   padding: const EdgeInsets.only(
                     left: 20,
                     top: 8,
@@ -117,7 +119,7 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
                       mainAxisAlignment: MainAxisAlignment.start,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ✅ Top divider
+                        // Top divider
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Center(
@@ -131,7 +133,7 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
                             ),
                           ),
                         ),
-                        // ✅ Title
+                        // Title
                         Padding(
                           padding: const EdgeInsets.only(
                             top: 4,
@@ -146,7 +148,7 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
                             ),
                           ),
                         ),
-                        // ✅ Slot details
+                        // Slot details
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
@@ -158,7 +160,7 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
                             ),
                           ),
                         ),
-                        // ✅ Machine info
+                        // Machine info
                         if (widget.machineId != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
@@ -171,7 +173,7 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
                               ),
                             ),
                           ),
-                        // ✅ Booking summary card
+                        // Booking summary card
                         Padding(
                           padding: const EdgeInsets.only(top: 16),
                           child: Container(
@@ -223,7 +225,7 @@ class _ConfirmBookingPageState extends State<ConfirmBookingPage> {
                   ),
                 ),
               ),
-              // ✅ Action buttons
+              // Action buttons
               Padding(
                 padding: const EdgeInsets.only(
                   left: 20,
