@@ -33,6 +33,42 @@ class ApiService {
     };
   }
 
+  // ✅ New method to register user with the backend API
+  static Future<void> registerUser({
+    required String token,
+    required String displayName,
+    required String phoneNumber,
+    required String misNumber,
+    required String hostelName,
+  }) async {
+    try {
+      final response = await _httpClient.post(
+        Uri.parse('$baseUrl/users/register'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'display_name': displayName,
+          'phone_number': phoneNumber,
+          'mis_number': misNumber,
+          'hostel_name': hostelName,
+        }),
+      ).timeout(timeoutDuration);
+
+      print('✅ Register API Response: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode != 201 && response.statusCode != 200) {
+        throw 'Backend registration failed: ${response.body}';
+      }
+    } on TimeoutException {
+      throw 'Backend registration timed out. Please try again.';
+    } catch (e) {
+      print('❌ Error in registerUser: $e');
+      rethrow;
+    }
+  }
+
   static Future<List<Machine>> getMachines() async {
     try {
       final headers = await _getHeaders();
@@ -59,7 +95,6 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       
-      // ✅ Normalize to UTC Midnight to match standard backend expectations
       final utcDate = DateTime.utc(date.year, date.month, date.day);
       final int timestamp = utcDate.millisecondsSinceEpoch;
 
@@ -108,7 +143,6 @@ class ApiService {
     }
   }
 
-  // ✅ Updated to match the new endpoint and body format
   static Future<Map<String, dynamic>> createBooking({
     required String machineId,
     required DateTime slotDate,
@@ -117,7 +151,6 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       
-      // Ensure date is in UTC and ISO format with .000Z
       final String formattedDate = slotDate.toUtc().toIso8601String();
 
       final body = jsonEncode({
@@ -192,7 +225,6 @@ class ApiService {
     }
   }
 
-  // ✅ Fetch upcoming bookings for the user
   static Future<List<Map<String, dynamic>>> getUpcomingBookings() async {
     try {
       final headers = await _getHeaders();

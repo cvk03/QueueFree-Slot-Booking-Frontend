@@ -48,7 +48,14 @@ class _ListMachinesPageState extends State<ListMachinesPage> {
               color: Colors.white,
               size: 30,
             ),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              // ✅ Fix: Check if we can pop, otherwise go to Dashboard
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                Navigator.pushReplacementNamed(context, '/dashboard');
+              }
+            },
           ),
           title: Text(
             'Available machines',

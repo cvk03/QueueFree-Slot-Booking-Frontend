@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'api-service.dart';
 
 class FirebaseService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -13,37 +14,51 @@ class FirebaseService {
     required String email,
     required String password,
     required String displayName,
+    required String phoneNumber,
+    required String misNumber,
+    required String hostelName,
   }) async {
+    print('DEBUG: FirebaseService.signUp started');
     try {
+      // 1. Create user in Firebase Auth
+      print('DEBUG: 1. Creating Auth user...');
       UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+      print('DEBUG: Auth user created UID: ${userCredential.user?.uid}');
 
-      // Update user display name
+      // 2. Update user display name in Firebase Auth profile
+      print('DEBUG: 2. Updating display name...');
       await userCredential.user?.updateDisplayName(displayName);
+
+      // 3. Get the ID Token for the API Header
+      print('DEBUG: 3. Getting ID Token...');
+      String? idToken = await userCredential.user?.getIdToken();
+
+      // 4. ✅ Call backend API to register the user
+      if (idToken != null) {
+        print('DEBUG: 4. Calling ApiService.registerUser...');
+        await ApiService.registerUser(
+          token: idToken,
+          displayName: displayName,
+          phoneNumber: phoneNumber,
+          misNumber: misNumber,
+          hostelName: hostelName,
+        );
+        print('DEBUG: ApiService.registerUser completed');
+      } else {
+        print('DEBUG: WARNING: ID Token was null, API NOT CALLED');
+      }
+
+      print('DEBUG: 5. Reloading user...');
       await userCredential.user?.reload();
-
-      // Create user document in Firestore with safe data
-      await _firestore.collection('users').doc(userCredential.user?.uid).set(
-        {
-          'uid': userCredential.user?.uid,
-          'email': email,
-          'displayName': displayName,
-          'createdAt': FieldValue.serverTimestamp(),
-          'photoURL': '',
-          'hostel': '',
-          'rollNumber': '',
-        },
-        SetOptions(merge: true),
-      ).catchError((e) {
-        print('Firestore error: $e');
-        // Don't fail signup if Firestore fails
-        return null;
-      });
-
+      
+      print('DEBUG: FirebaseService.signUp SUCCESS - Returning');
       return userCredential;
+      
     } on FirebaseAuthException catch (e) {
+      print('DEBUG: FirebaseAuthException in signUp: ${e.code}');
       if (e.code == 'weak-password') {
         throw 'The password provided is too weak. Use at least 6 characters.';
       } else if (e.code == 'email-already-in-use') {
@@ -54,7 +69,8 @@ class FirebaseService {
         throw e.message ?? 'An error occurred during sign up.';
       }
     } catch (e) {
-      throw 'An unexpected error occurred: $e';
+      print('DEBUG: Unexpected error in signUp: $e');
+      rethrow;
     }
   }
 
@@ -116,8 +132,9 @@ class FirebaseService {
     }
   }
 
-  // Get user data from Firestore - FIXED
+  // Get user data from Firestore
   static Future<Map<String, dynamic>> getUserData(String uid) async {
+    print('DEBUG: FirebaseService.getUserData called for UID: $uid');
     try {
       DocumentSnapshot<Map<String, dynamic>> doc =
       await _firestore.collection('users').doc(uid).get();
@@ -125,7 +142,6 @@ class FirebaseService {
       if (doc.exists && doc.data() != null) {
         return doc.data()!;
       } else {
-        // Return empty map if user document doesn't exist
         return {
           'uid': uid,
           'email': '',
@@ -135,7 +151,6 @@ class FirebaseService {
       }
     } catch (e) {
       print('Error fetching user data: $e');
-      // Return empty map on error instead of throwing
       return {
         'uid': uid,
         'email': '',

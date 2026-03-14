@@ -26,6 +26,9 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
     required String displayName,
+    required String phoneNumber,
+    required String misNumber,
+    required String hostelName,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -33,7 +36,8 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       // Validate inputs
-      if (email.isEmpty || password.isEmpty || displayName.isEmpty) {
+      if (email.isEmpty || password.isEmpty || displayName.isEmpty || 
+          phoneNumber.isEmpty || misNumber.isEmpty || hostelName.isEmpty) {
         _errorMessage = 'All fields are required.';
         _isLoading = false;
         notifyListeners();
@@ -51,6 +55,9 @@ class AuthProvider extends ChangeNotifier {
         email: email,
         password: password,
         displayName: displayName,
+        phoneNumber: phoneNumber,
+        misNumber: misNumber,
+        hostelName: hostelName,
       );
 
       _user = credential?.user;

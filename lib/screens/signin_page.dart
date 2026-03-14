@@ -13,14 +13,21 @@ class SignInPage extends StatefulWidget {
 class _SignInPageState extends State<SignInPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isSignUp = false;
   final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _misController = TextEditingController();
+  final _hostelController = TextEditingController();
+  
+  bool _isSignUp = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
+    _phoneController.dispose();
+    _misController.dispose();
+    _hostelController.dispose();
     super.dispose();
   }
 
@@ -57,13 +64,47 @@ class _SignInPageState extends State<SignInPage> {
                       ),
                     ),
                     const SizedBox(height: 32),
-                    // Name field (only for sign up)
+                    // Sign up specific fields
                     if (_isSignUp) ...[
                       TextField(
                         controller: _nameController,
                         decoration: InputDecoration(
                           labelText: 'Full Name',
                           hintText: 'Enter your full name',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _phoneController,
+                        decoration: InputDecoration(
+                          labelText: 'Phone Number',
+                          hintText: 'Enter your phone number',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _misController,
+                        decoration: InputDecoration(
+                          labelText: 'MIS Number',
+                          hintText: 'Enter your MIS number',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _hostelController,
+                        decoration: InputDecoration(
+                          labelText: 'Hostel Name',
+                          hintText: 'Enter your hostel name',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -123,11 +164,14 @@ class _SignInPageState extends State<SignInPage> {
                               email: _emailController.text.trim(),
                               password: _passwordController.text,
                               displayName: _nameController.text.trim(),
+                              phoneNumber: _phoneController.text.trim(),
+                              misNumber: _misController.text.trim(),
+                              hostelName: _hostelController.text.trim(),
                             );
                             if (success && mounted) {
                               Navigator.pushReplacementNamed(
                                 context,
-                                '/list_machines',
+                                '/dashboard',
                               );
                             }
                           } else {
@@ -138,7 +182,7 @@ class _SignInPageState extends State<SignInPage> {
                             if (success && mounted) {
                               Navigator.pushReplacementNamed(
                                 context,
-                                '/list_machines',
+                                '/dashboard',
                               );
                             }
                           }
