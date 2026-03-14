@@ -71,7 +71,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final machineId = widget.eachMachineBooking?.machineId ?? "Unknown";
     final machineLocation =
-        widget.eachMachineBooking?.location ?? "Unknown Location";
+        widget.eachMachineBooking?.hostel ?? "Unknown Location";
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F4F8),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'firebase_options.dart';
 import 'models/Machine.dart';
 import 'models/home_model.dart';
@@ -173,15 +174,25 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, _) {
-        // ✅ If user is logged in, show Dashboard
-        if (authProvider.isUserLoggedIn) {
-          return const DashboardPage();
-        } else {
-          // ✅ Otherwise, show SignIn page
-          return const SignInPage();
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // If the connection is active, check the user data
+        if (snapshot.connectionState == ConnectionState.active) {
+          final User? user = snapshot.data;
+          if (user == null) {
+            return const SignInPage();
+          } else {
+            return const DashboardPage();
+          }
         }
+        
+        // Otherwise, show a loading indicator while waiting for the auth state
+        return const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
       },
     );
   }

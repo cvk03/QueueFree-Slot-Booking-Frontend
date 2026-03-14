@@ -2,18 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../models/Machine.dart';
+import '../services/api-service.dart';
 import 'home_page.dart';
-
-Future<List<Machine>> fetchMachines() async {
-  await Future.delayed(const Duration(milliseconds: 800));
-  return List.generate(
-    5,
-        (i) => Machine(
-      machineId: 'WM${i + 1}',
-      location: 'Vishalgad Hostel',
-    ),
-  );
-}
 
 class ListMachinesPage extends StatefulWidget {
   const ListMachinesPage({Key? key}) : super(key: key);
@@ -23,6 +13,26 @@ class ListMachinesPage extends StatefulWidget {
 }
 
 class _ListMachinesPageState extends State<ListMachinesPage> {
+  late Future<List<Machine>> _machinesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _machinesFuture = ApiService.getMachines();
+  }
+
+  void _retryFetch() {
+    setState(() {
+      _machinesFuture = ApiService.getMachines();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Retrying...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -65,17 +75,107 @@ class _ListMachinesPageState extends State<ListMachinesPage> {
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: FutureBuilder<List<Machine>>(
-                          future: fetchMachines(),
+                          future: _machinesFuture,
                           builder: (context, snapshot) {
-                            if (!snapshot.hasData) {
-                              return const Center(
-                                child: SizedBox(
-                                  width: 50,
-                                  height: 50,
-                                  child: CircularProgressIndicator(),
+                            // Loading state
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(40.0),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const CircularProgressIndicator(),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'Loading machines...',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 16,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                              );
+                            }
+
+                            // Error state
+                            if (snapshot.hasError) {
+                              final error = snapshot.error.toString();
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24.0),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.error_outline,
+                                        size: 64,
+                                        color: Colors.red[300],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'Error loading machines',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.red[600],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        error,
+                                        textAlign: TextAlign.center,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 14,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      ElevatedButton.icon(
+                                        onPressed: _retryFetch,
+                                        icon: const Icon(Icons.refresh),
+                                        label: const Text('Retry'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.indigo,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             }
+
+                            // Empty state
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              return Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24.0),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.local_laundry_service,
+                                        size: 64,
+                                        color: Colors.grey[400],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'No machines available',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 18,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // Success state
                             final machines = snapshot.data!;
                             return ListView.builder(
                               padding: EdgeInsets.zero,
@@ -85,8 +185,11 @@ class _ListMachinesPageState extends State<ListMachinesPage> {
                               itemBuilder: (context, index) {
                                 final machine = machines[index];
                                 return Padding(
-                                  padding: const EdgeInsetsDirectional.fromSTEB(
-                                      16, 8, 16, 0),
+                                  padding: const EdgeInsets.only(
+                                    left: 16,
+                                    top: 8,
+                                    right: 16,
+                                  ),
                                   child: Container(
                                     width: double.infinity,
                                     height: 100,
@@ -102,14 +205,17 @@ class _ListMachinesPageState extends State<ListMachinesPage> {
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Padding(
-                                      padding:
-                                      const EdgeInsetsDirectional.fromSTEB(
-                                          16, 8, 8, 8),
+                                      padding: const EdgeInsets.only(
+                                        left: 16,
+                                        top: 8,
+                                        right: 8,
+                                        bottom: 8,
+                                      ),
                                       child: Row(
                                         mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
                                         children: [
-                                          // ✅ Machine Image
+                                          // Machine Image
                                           Hero(
                                             tag:
                                             'ControllerImage_${machine.machineId}_$index',
@@ -144,67 +250,69 @@ class _ListMachinesPageState extends State<ListMachinesPage> {
                                               ),
                                             ),
                                           ),
-                                          // ✅ Machine Details
-                                          Padding(
-                                            padding: const EdgeInsetsDirectional
-                                                .fromSTEB(12, 0, 0, 0),
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.max,
-                                              mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                              crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                              children: [
-                                                Padding(
-                                                  padding:
-                                                  const EdgeInsetsDirectional
-                                                      .only(bottom: 8),
-                                                  child: Text(
-                                                    machine.machineId,
+                                          // Machine Details
+                                          Expanded(
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: 12,
+                                              ),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.max,
+                                                mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                                children: [
+                                                  // ✅ Display machineId
+                                                  Text(
+                                                    'Machine ${machine.machineId}',
                                                     style: GoogleFonts
                                                         .plusJakartaSans(
                                                       color: const Color(
                                                           0xFF14181B),
                                                       fontSize: 16,
                                                       fontWeight:
-                                                      FontWeight.w500,
+                                                      FontWeight.w600,
                                                     ),
                                                   ),
-                                                ),
-                                                Text(
-                                                  machine.location ??
-                                                      'Unknown Location',
-                                                  style: GoogleFonts
-                                                      .plusJakartaSans(
-                                                    color: const Color(
-                                                        0xFF57636C),
-                                                    fontSize: 14,
-                                                    fontWeight:
-                                                    FontWeight.normal,
+                                                  const SizedBox(height: 4),
+                                                  // ✅ Display hostel (location)
+                                                  Text(
+                                                    machine.hostel,
+                                                    style: GoogleFonts
+                                                        .plusJakartaSans(
+                                                      color: const Color(
+                                                          0xFF57636C),
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                      FontWeight.normal,
+                                                    ),
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
                                           ),
-                                          // ✅ Calendar Icon - Navigate to HomePage
-                                          IconButton(
-                                            icon: const FaIcon(
-                                              FontAwesomeIcons.calendar,
-                                              color: Color(0xFF4B39EF),
-                                              size: 20,
+                                          // Calendar Icon Button
+                                          Material(
+                                            color: Colors.transparent,
+                                            child: IconButton(
+                                              icon: const FaIcon(
+                                                FontAwesomeIcons.calendar,
+                                                color: Color(0xFF4B39EF),
+                                                size: 20,
+                                              ),
+                                              onPressed: () {
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        HomePage(
+                                                          eachMachineBooking:
+                                                          machine,
+                                                        ),
+                                                  ),
+                                                );
+                                              },
                                             ),
-                                            onPressed: () {
-                                              // ✅ Navigate to HomePage with Machine object
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      HomePage(
-                                                        eachMachineBooking:
-                                                        machine,
-                                                      ),
-                                                ),
-                                              );
-                                            },
                                           ),
                                         ],
                                       ),
