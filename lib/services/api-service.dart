@@ -166,6 +166,58 @@ class ApiService {
     }
   }
 
+  // ✅ Fetch completed bookings for the user
+  static Future<List<Map<String, dynamic>>> getCompletedBookings() async {
+    try {
+      final headers = await _getHeaders();
+      final url = '$baseUrl/allbookings/completed';
+      print('🔄 Fetching completed bookings: $url');
+
+      final response = await _httpClient.get(
+        Uri.parse(url),
+        headers: headers,
+      ).timeout(timeoutDuration);
+
+      print('✅ API Response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(data);
+      } else {
+        throw 'Failed to fetch completed bookings: ${response.statusCode}';
+      }
+    } catch (e) {
+      print('❌ Error fetching completed bookings: $e');
+      rethrow;
+    }
+  }
+
+  // ✅ Fetch upcoming bookings for the user
+  static Future<List<Map<String, dynamic>>> getUpcomingBookings() async {
+    try {
+      final headers = await _getHeaders();
+      final url = '$baseUrl/allbookings/upcoming';
+      print('🔄 Fetching upcoming bookings: $url');
+
+      final response = await _httpClient.get(
+        Uri.parse(url),
+        headers: headers,
+      ).timeout(timeoutDuration);
+
+      print('✅ API Response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(data);
+      } else {
+        throw 'Failed to fetch upcoming bookings: ${response.statusCode}';
+      }
+    } catch (e) {
+      print('❌ Error fetching upcoming bookings: $e');
+      rethrow;
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> getUserBookings(String userId) async {
     try {
       final headers = await _getHeaders();

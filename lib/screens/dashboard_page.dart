@@ -1,22 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import 'package:percent_indicator/linear_percent_indicator.dart';
 import '../services/firebase_service.dart';
-import '../providers/auth_provider.dart';
+import '../services/api-service.dart';
 import 'machines_page.dart';
 import 'profile_page.dart';
 
 class Booking {
-  final int machine;
+  final String id;
+  final String machineReference;
+  final String machineId; // Human-readable ID (e.g., "03")
   final DateTime date;
   final bool completed;
 
   Booking({
-    required this.machine,
+    required this.id,
+    required this.machineReference,
+    required this.machineId,
     required this.date,
     this.completed = false,
   });
+
+  factory Booking.fromJson(Map<String, dynamic> json, {bool completed = false}) {
+    return Booking(
+      id: json['bookingId'] ?? '',
+      machineReference: json['machine_reference'] ?? '',
+      machineId: json['machine'] != null && json['machine'].toString().isNotEmpty 
+          ? json['machine'].toString() 
+          : 'Unknown',
+      // ✅ Use .toLocal() to show the correct time in your timezone
+      date: json['date'] != null 
+          ? DateTime.parse(json['date']).toLocal() 
+          : DateTime.now(),
+      completed: completed,
+    );
+  }
 }
 
 class DashboardPage extends StatefulWidget {
@@ -31,24 +49,17 @@ class _DashboardPageState extends State<DashboardPage>
   late TabController tabController;
 
   String userName = "User";
-
-  List<Booking> upcomingBookings = [
-    Booking(machine: 1, date: DateTime.now().add(const Duration(hours: 2))),
-    Booking(machine: 3, date: DateTime.now().add(const Duration(days: 1))),
-  ];
-
-  List<Booking> completedBookings = [
-    Booking(
-        machine: 2,
-        date: DateTime.now().subtract(const Duration(days: 1)),
-        completed: true),
-  ];
+  List<Booking> upcomingBookings = [];
+  List<Booking> completedBookings = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     tabController = TabController(length: 2, vsync: this);
     _loadUserName();
+    _fetchBookings();
   }
 
   void _loadUserName() {
@@ -57,6 +68,41 @@ class _DashboardPageState extends State<DashboardPage>
       setState(() {
         userName = user.displayName ?? "User";
       });
+    }
+  }
+
+  Future<void> _fetchBookings() async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        ApiService.getUpcomingBookings(),
+        ApiService.getCompletedBookings(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          upcomingBookings = (results[0] as List)
+              .map((json) => Booking.fromJson(json, completed: false))
+              .toList();
+          completedBookings = (results[1] as List)
+              .map((json) => Booking.fromJson(json, completed: true))
+              .toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -72,19 +118,8 @@ class _DashboardPageState extends State<DashboardPage>
 
   String _month(int m) {
     const months = [
-      "",
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec"
+      "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
     ];
     return months[m];
   }
@@ -121,11 +156,12 @@ class _DashboardPageState extends State<DashboardPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ✅ Restored CheckboxListTile layout
               CheckboxListTile(
                 value: completed,
                 onChanged: (_) {},
                 title: Text(
-                  "Machine no. ${booking.machine}",
+                  "Machine no. ${booking.machineId}",
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w500,
@@ -147,53 +183,52 @@ class _DashboardPageState extends State<DashboardPage>
                       ),
                     ),
                   ),
-                  completed
-                      ? Container(
-                    width: 100,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(32),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      "Completed",
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.w500,
+                  if (completed)
+                    Container(
+                      width: 100,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(32),
                       ),
-                    ),
-                  )
-                      : Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          upcomingBookings.remove(booking);
-                        });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Booking cancelled'),
-                            duration: Duration(seconds: 2),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        "Completed",
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    )
+                  else
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          // TODO: Implement cancel booking via API
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Cancellation not implemented yet'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(32),
+                        child: Container(
+                          width: 120,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F4F8),
+                            borderRadius: BorderRadius.circular(32),
                           ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(32),
-                      child: Container(
-                        width: 120,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F4F8),
-                          borderRadius: BorderRadius.circular(32),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          "Cancel booking",
-                          style: TextStyle(fontSize: 13),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            "Cancel booking",
+                            style: TextStyle(fontSize: 13),
+                          ),
                         ),
                       ),
-                    ),
-                  )
+                    )
                 ],
               )
             ],
@@ -204,6 +239,20 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Widget upcomingTab() {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Error: $_errorMessage', style: const TextStyle(color: Colors.red)),
+            ElevatedButton(onPressed: _fetchBookings, child: const Text('Retry'))
+          ],
+        ),
+      );
+    }
+
     return upcomingBookings.isEmpty
         ? Center(
       child: Padding(
@@ -211,47 +260,41 @@ class _DashboardPageState extends State<DashboardPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.event_busy,
-              size: 64,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'No upcoming bookings',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                color: Colors.grey[600],
-              ),
+              style: GoogleFonts.outfit(fontSize: 18, color: Colors.grey[600]),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const ListMachinesPage(),
-                  ),
+                  MaterialPageRoute(builder: (context) => const ListMachinesPage()),
                 );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4B39EF),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4B39EF)),
               child: const Text('Book Now'),
             ),
           ],
         ),
       ),
     )
-        : ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: upcomingBookings.length,
-      itemBuilder: (context, index) {
-        return bookingCard(upcomingBookings[index]);
-      },
-    );
+        : RefreshIndicator(
+            onRefresh: _fetchBookings,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: upcomingBookings.length,
+              itemBuilder: (context, index) => bookingCard(upcomingBookings[index]),
+            ),
+          );
   }
 
   Widget completedTab() {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+
+    if (_errorMessage != null) return const Center(child: Text('Error loading bookings'));
+
     return completedBookings.isEmpty
         ? Center(
       child: Padding(
@@ -259,37 +302,30 @@ class _DashboardPageState extends State<DashboardPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.check_circle,
-              size: 64,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.check_circle, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'No completed bookings',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                color: Colors.grey[600],
-              ),
+              style: GoogleFonts.outfit(fontSize: 18, color: Colors.grey[600]),
             ),
           ],
         ),
       ),
     )
-        : ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: completedBookings.length,
-      itemBuilder: (context, index) {
-        return bookingCard(completedBookings[index], completed: true);
-      },
-    );
+        : RefreshIndicator(
+            onRefresh: _fetchBookings,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: completedBookings.length,
+              itemBuilder: (context, index) => bookingCard(completedBookings[index], completed: true),
+            ),
+          );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F4F8),
-      // ✅ COMPLETE FIX - Removed flexibleSpace, use simpler AppBar
       appBar: AppBar(
         backgroundColor: const Color(0xFF4B39EF),
         elevation: 0,
@@ -303,20 +339,12 @@ class _DashboardPageState extends State<DashboardPage>
             children: [
               const Text(
                 "Welcome",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 4),
               Text(
                 userName,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -324,16 +352,11 @@ class _DashboardPageState extends State<DashboardPage>
       ),
       body: Column(
         children: [
-          // ✅ Go to Profile Button - Made interactive
           Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const ProfilePage(),
-                  ),
-                );
+                Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ProfilePage()));
               },
               child: Container(
                 height: 50,
@@ -346,11 +369,7 @@ class _DashboardPageState extends State<DashboardPage>
                   children: [
                     Text(
                       "Go to Profile",
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
                     ),
                     const Icon(Icons.chevron_right, color: Colors.white),
                   ],
@@ -358,16 +377,12 @@ class _DashboardPageState extends State<DashboardPage>
               ),
             ),
           ),
-          // ✅ Book New Slot Button - Made interactive
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const ListMachinesPage(),
-                  ),
-                );
+              onTap: () async {
+                await Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ListMachinesPage()));
+                _fetchBookings(); // Refresh list after coming back from booking
               },
               child: Container(
                 color: Colors.white,
@@ -378,10 +393,7 @@ class _DashboardPageState extends State<DashboardPage>
                       Expanded(
                         child: Text(
                           "Book new slot now",
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.w500),
                         ),
                       ),
                       const Icon(Icons.chevron_right_rounded),
@@ -404,10 +416,7 @@ class _DashboardPageState extends State<DashboardPage>
             margin: const EdgeInsets.symmetric(horizontal: 16),
             child: TabBar(
               controller: tabController,
-              indicator: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
+              indicator: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
               labelColor: const Color(0xFF4B39EF),
               unselectedLabelColor: const Color(0xFF57636C),
               tabs: const [
