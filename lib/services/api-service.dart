@@ -7,32 +7,25 @@ import '../models/Machine.dart';
 
 class ApiService {
   static const String baseUrl = 'https://queuefree-slot-booking-backend.onrender.com';
-  // ✅ Increased timeout to 90s because Render free tier needs time to spin up
   static const Duration timeoutDuration = Duration(seconds: 90);
 
-  // ✅ Create a custom HTTP client
   static final http.Client _httpClient = http.Client();
 
-  // ✅ Get current user's ID token from Firebase
   static Future<String?> _getAuthToken() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw 'User not authenticated';
       }
-      // Get Firebase ID token and force refresh
-      final idToken = await user.getIdToken(true);
-      return idToken;
+      return await user.getIdToken(true);
     } catch (e) {
       print('❌ Error getting auth token: $e');
       return null;
     }
   }
 
-  // ✅ Helper method to get headers with Authorization token
   static Future<Map<String, String>> _getHeaders({String? customToken}) async {
     final token = customToken ?? await _getAuthToken();
-
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -40,47 +33,65 @@ class ApiService {
     };
   }
 
-  // ✅ Get all machines - Updated with better error handling for cold starts
   static Future<List<Machine>> getMachines() async {
     try {
       final headers = await _getHeaders();
-
-      print('🔄 Fetching machines from: $baseUrl/machines');
-      
       final response = await _httpClient.get(
         Uri.parse('$baseUrl/machines'),
         headers: headers,
       ).timeout(timeoutDuration);
 
-      print('✅ GET /machines - Status: ${response.statusCode}');
-
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-
-        final machines = data
-            .map((json) => Machine.fromJson(json as Map<String, dynamic>))
-            .toList();
-
-        return machines;
-      } else if (response.statusCode == 401) {
-        throw 'Unauthorized: Please sign in again';
+        return data.map((json) => Machine.fromJson(json as Map<String, dynamic>)).toList();
       } else {
         throw 'Server error: ${response.statusCode}';
       }
-    } on TimeoutException {
-      throw 'The server is taking too long to respond. This often happens on the first request as the backend wakes up. Please try again in a few seconds.';
-    } on SocketException catch (e) {
-      throw 'Network Error: ${e.message}. Check your internet connection.';
     } catch (e) {
       throw 'Error fetching machines: $e';
     }
   }
 
-  // ✅ Get machine details by ID
+  static Future<List<Map<String, dynamic>>> getAvailableSlots(
+      String machineId,
+      DateTime date,
+      ) async {
+    try {
+      final headers = await _getHeaders();
+      
+      // ✅ Normalize to UTC Midnight to match standard backend expectations
+      final utcDate = DateTime.utc(date.year, date.month, date.day);
+      final int timestamp = utcDate.millisecondsSinceEpoch;
+
+      final url = '$baseUrl/machines/$machineId/available-slots?date=$timestamp';
+      print('🔄 API Request: GET $url');
+
+      final response = await _httpClient.get(
+        Uri.parse(url),
+        headers: headers,
+      ).timeout(timeoutDuration);
+
+      print('✅ API Response: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(data);
+      } else if (response.statusCode == 400) {
+        throw 'Bad Request: The server rejected the parameters. URL: $url';
+      } else {
+        throw 'Failed to fetch slots: ${response.statusCode}';
+      }
+    } on TimeoutException {
+      throw 'Server timeout. The backend might still be waking up.';
+    } catch (e) {
+      print('❌ Error fetching slots: $e');
+      rethrow;
+    }
+  }
+
   static Future<Machine> getMachineById(String machineId) async {
     try {
       final headers = await _getHeaders();
-
       final response = await _httpClient.get(
         Uri.parse('$baseUrl/machines/$machineId'),
         headers: headers,
@@ -97,32 +108,6 @@ class ApiService {
     }
   }
 
-  // ✅ Get available slots for a machine
-  static Future<List<Map<String, dynamic>>> getAvailableSlots(
-      String machineId,
-      DateTime date,
-      ) async {
-    try {
-      final headers = await _getHeaders();
-      final formattedDate = date.toIso8601String().split('T')[0];
-
-      final response = await _httpClient.get(
-        Uri.parse('$baseUrl/machines/$machineId/slots?date=$formattedDate'),
-        headers: headers,
-      ).timeout(timeoutDuration);
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return List<Map<String, dynamic>>.from(data);
-      } else {
-        throw 'Failed to fetch slots: ${response.statusCode}';
-      }
-    } catch (e) {
-      throw 'Error fetching slots: $e';
-    }
-  }
-
-  // ✅ Create a booking
   static Future<Map<String, dynamic>> createBooking({
     required String machineId,
     required DateTime slotDate,
@@ -131,7 +116,6 @@ class ApiService {
   }) async {
     try {
       final headers = await _getHeaders();
-
       final body = jsonEncode({
         'machineId': machineId,
         'slotDate': slotDate.toIso8601String(),
@@ -155,11 +139,9 @@ class ApiService {
     }
   }
 
-  // ✅ Get user bookings
   static Future<List<Map<String, dynamic>>> getUserBookings(String userId) async {
     try {
       final headers = await _getHeaders();
-
       final response = await _httpClient.get(
         Uri.parse('$baseUrl/bookings/user/$userId'),
         headers: headers,
@@ -176,11 +158,9 @@ class ApiService {
     }
   }
 
-  // ✅ Cancel a booking
   static Future<void> cancelBooking(String bookingId) async {
     try {
       final headers = await _getHeaders();
-
       final response = await _httpClient.delete(
         Uri.parse('$baseUrl/bookings/$bookingId'),
         headers: headers,
@@ -194,14 +174,12 @@ class ApiService {
     }
   }
 
-  // ✅ Update booking
   static Future<Map<String, dynamic>> updateBooking(
       String bookingId,
       Map<String, dynamic> updateData,
       ) async {
     try {
       final headers = await _getHeaders();
-
       final response = await _httpClient.put(
         Uri.parse('$baseUrl/bookings/$bookingId'),
         headers: headers,
@@ -218,13 +196,8 @@ class ApiService {
     }
   }
 
-  // ✅ Handle API errors
   static String handleError(dynamic error) {
-    if (error is String) {
-      return error;
-    } else if (error is Exception) {
-      return error.toString();
-    }
-    return 'An unexpected error occurred';
+    if (error is String) return error;
+    return error.toString();
   }
 }

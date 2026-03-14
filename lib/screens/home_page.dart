@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/Machine.dart';
+import '../services/api-service.dart'; // ✅ Added import
 import 'confirm_booking_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -17,50 +18,51 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   late DateTime selectedDate;
-  late int selectedHour;
-  List<int> bookedHours = [10, 11, 14];
+  DateTime? selectedSlot; // ✅ Changed from int selectedHour to DateTime
+  late Future<List<Map<String, dynamic>>> _slotsFuture; // ✅ Added Future
 
   @override
   void initState() {
     super.initState();
-    selectedDate = DateTime.now();
-    selectedHour = 8;
+    // Normalize initial date to midnight
+    final now = DateTime.now();
+    selectedDate = DateTime(now.year, now.month, now.day);
+    _fetchSlots(); // ✅ Initial fetch
+  }
+
+  // ✅ Fetch slots based on selected date and machine
+  void _fetchSlots() {
+    setState(() {
+      // ✅ Use .id instead of .machineId for the API call
+      // ✅ Ensure the date is at midnight (00:00:00)
+      final normalizedDate = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+      );
+      
+      _slotsFuture = ApiService.getAvailableSlots(
+        widget.eachMachineBooking?.id ?? "",
+        normalizedDate,
+      );
+    });
   }
 
   String formatDate(DateTime date) {
     const months = [
-      "",
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec"
+      "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
     ];
     return "${date.day} ${months[date.month]} ${date.year}";
   }
 
-  void _showConfirmBookingDialog() {
-    // Combine date and selected hour
-    final slotDateTime = DateTime(
-      selectedDate.year,
-      selectedDate.month,
-      selectedDate.day,
-      selectedHour,
-    );
-
+  void _showConfirmBookingDialog(DateTime slotTime) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => ConfirmBookingPage(
-        slotDate: slotDateTime,
+        slotDate: slotTime,
         machineId: widget.eachMachineBooking?.machineId,
         machine: widget.eachMachineBooking,
       ),
@@ -147,8 +149,10 @@ class _HomePageState extends State<HomePage> {
                         );
                         if (picked != null) {
                           setState(() {
-                            selectedDate = picked;
+                            // Normalize to midnight
+                            selectedDate = DateTime(picked.year, picked.month, picked.day);
                           });
+                          _fetchSlots(); // ✅ Refresh slots on date change
                         }
                       },
                       child: Container(
@@ -179,7 +183,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 16),
-              // ✅ Available Time Slots
+              // ✅ Available Time Slots with FutureBuilder
               Container(
                 width: double.infinity,
                 color: Colors.white,
@@ -196,51 +200,102 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // ✅ Time Slots Grid
-                    GridView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 2.5,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: 12,
-                      itemBuilder: (context, index) {
-                        final hour = 8 + index;
-                        final isBooked = bookedHours.contains(hour);
-
-                        return GestureDetector(
-                          onTap: isBooked
-                              ? null
-                              : () {
-                            setState(() {
-                              selectedHour = hour;
-                            });
-                            // Show confirmation dialog
-                            _showConfirmBookingDialog();
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isBooked
-                                  ? Colors.grey[300]
-                                  : Colors.indigo,
-                              borderRadius: BorderRadius.circular(8),
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _slotsFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32.0),
+                              child: CircularProgressIndicator(),
                             ),
-                            child: Center(
-                              child: Text(
-                                '${hour.toString().padLeft(2, '0')}:00',
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: isBooked
-                                      ? Colors.grey[600]
-                                      : Colors.white,
-                                  fontWeight: FontWeight.w600,
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Error: ${snapshot.error}',
+                                  style: const TextStyle(color: Colors.red),
+                                  textAlign: TextAlign.center,
+                                ),
+                                TextButton(
+                                  onPressed: _fetchSlots,
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final slots = snapshot.data ?? [];
+                        if (slots.isEmpty) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20.0),
+                              child: Text('No slots available for this date.'),
+                            ),
+                          );
+                        }
+
+                        return GridView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          shrinkWrap: true,
+                          gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 2.5,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: slots.length,
+                          itemBuilder: (context, index) {
+                            final slotData = slots[index];
+                            DateTime? startTime;
+
+                            // ✅ Handle timestamp format from API: {"seconds": 123, "nanos": 0}
+                            if (slotData.containsKey('seconds')) {
+                              startTime = DateTime.fromMillisecondsSinceEpoch(
+                                  (slotData['seconds'] as int) * 1000);
+                            } else {
+                              final startTimeStr = slotData['startTime'] ?? slotData['time'] ?? "";
+                              if (startTimeStr.isNotEmpty) {
+                                startTime = DateTime.tryParse(startTimeStr);
+                              }
+                            }
+
+                            if (startTime == null) return const SizedBox();
+                            
+                            // Since it's from available-slots, default to true
+                            final isAvailable = slotData['isAvailable'] ?? true;
+
+                            return GestureDetector(
+                              onTap: !isAvailable
+                                  ? null
+                                  : () => _showConfirmBookingDialog(startTime!),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: isAvailable
+                                      ? Colors.indigo
+                                      : Colors.grey[300],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: isAvailable
+                                          ? Colors.white
+                                          : Colors.grey[600],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         );
                       },
                     ),
